@@ -1,46 +1,72 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
-import { Bell, Plus, Edit, Trash2, Save } from 'lucide-react';
+import { Bell, Plus, Edit, Trash2, Save, RefreshCw } from 'lucide-react';
+import { getApiUrl, getStoredItems, saveStoredItems } from '@/lib/storage';
 
 interface NoticeItem {
   id: string;
+  _id?: string;
   title: string;
   category: string;
   status: 'PUBLISHED' | 'DRAFT';
   isImportant: boolean;
   date: string;
+  content?: string;
+  slug?: string;
 }
 
-export default function AdminNoticesPage() {
-  const [notices, setNotices] = useState<NoticeItem[]>([
-    { id: '1', title: 'Admissions Open for Session 2026', category: 'Admission', status: 'PUBLISHED', isImportant: true, date: '2026-08-24' },
-    { id: '2', title: 'First Semester Internal Examination Routine Notice', category: 'Examination', status: 'PUBLISHED', isImportant: false, date: '2026-08-18' },
-  ]);
+const DEFAULT_NOTICES: NoticeItem[] = [
+  { id: '1', title: 'Admissions Open for Session 2026', category: 'Admission', status: 'PUBLISHED', isImportant: true, date: '2026-08-24' },
+  { id: '2', title: 'First Semester Internal Examination Routine Notice', category: 'Examination', status: 'PUBLISHED', isImportant: false, date: '2026-08-18' },
+];
 
-  // Load persisted notices from localStorage on mount
-  React.useEffect(() => {
+export default function AdminNoticesPage() {
+  const [notices, setNotices] = useState<NoticeItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch notices from API (MongoDB Atlas) & fallback to persistent storage
+  const fetchNotices = async () => {
+    setLoading(true);
     try {
-      const saved = localStorage.getItem('nobel_cms_notices');
-      if (saved) {
-        setNotices(JSON.parse(saved));
+      const res = await fetch(getApiUrl('/api/v1/cms/notices'));
+      const json = await res.json();
+      if (res.ok && json.success && Array.isArray(json.data?.items)) {
+        const apiNotices: NoticeItem[] = json.data.items.map((n: any) => ({
+          id: n._id || n.id || n.slug,
+          _id: n._id,
+          title: n.title,
+          category: n.category || 'Academic',
+          status: n.status || 'PUBLISHED',
+          isImportant: Boolean(n.isImportant),
+          date: n.publishedAt ? new Date(n.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          content: n.content,
+          slug: n.slug,
+        }));
+
+        if (apiNotices.length > 0) {
+          setNotices(apiNotices);
+          saveStoredItems('nobel_cms_notices', apiNotices);
+          setLoading(false);
+          return;
+        }
       }
     } catch (err) {
-      console.error('Failed to load notices from storage:', err);
+      console.warn('API notice fetch offline, using local storage:', err);
     }
-  }, []);
 
-  // Helper to update state & persist
-  const saveNoticesToStorage = (updated: NoticeItem[]) => {
-    setNotices(updated);
-    try {
-      localStorage.setItem('nobel_cms_notices', JSON.stringify(updated));
-      window.dispatchEvent(new Event('storage'));
-    } catch (err) {
-      console.error('Failed to save notices to storage:', err);
-    }
+    // Fallback to localStorage
+    const stored = getStoredItems<NoticeItem>('nobel_cms_notices', DEFAULT_NOTICES);
+    setNotices(stored);
+    setLoading(false);
   };
+
+  useEffect(() => {
+    fetchNotices();
+    window.addEventListener('storage', fetchNotices);
+    return () => window.removeEventListener('storage', fetchNotices);
+  }, []);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<NoticeItem | null>(null);
@@ -48,6 +74,7 @@ export default function AdminNoticesPage() {
   const [category, setCategory] = useState('Admission');
   const [isImportant, setIsImportant] = useState(false);
   const [status, setStatus] = useState<'PUBLISHED' | 'DRAFT'>('PUBLISHED');
+  const [saving, setSaving] = useState(false);
 
   const openCreateModal = () => {
     setEditingItem(null);
@@ -67,143 +94,229 @@ export default function AdminNoticesPage() {
     setModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string, mongoId?: string) => {
     if (confirm('Are you sure you want to delete this notice?')) {
       const updated = notices.filter((item) => item.id !== id);
-      saveNoticesToStorage(updated);
+      setNotices(updated);
+      saveStoredItems('nobel_cms_notices', updated);
+
+      if (mongoId) {
+        try {
+          await fetch(getApiUrl(`/api/v1/cms/notices/${mongoId}`), { method: 'DELETE' });
+        } catch (e) {
+          console.warn('Could not delete from API:', e);
+        }
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
+
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    const payload = {
+      title,
+      slug: slug || `notice-${Date.now()}`,
+      content: title || 'Official notice from Nobel Multiple College.',
+      category,
+      isImportant,
+      status,
+      publishedAt: new Date().toISOString(),
+    };
+
+    let newNoticeItem: NoticeItem = {
+      id: Date.now().toString(),
+      title,
+      category,
+      isImportant,
+      status,
+      date: new Date().toISOString().split('T')[0],
+      content: payload.content,
+      slug: payload.slug,
+    };
+
+    // Save to MongoDB Atlas API
+    try {
+      const isEdit = Boolean(editingItem?._id);
+      const url = isEdit ? getApiUrl(`/api/v1/cms/notices/${editingItem!._id}`) : getApiUrl('/api/v1/cms/notices');
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (res.ok && json.data) {
+        newNoticeItem._id = json.data._id;
+        newNoticeItem.id = json.data._id || newNoticeItem.id;
+      }
+    } catch (err) {
+      console.warn('Backend API offline, saved locally to persistent storage:', err);
+    }
+
+    // Save locally
     let updated: NoticeItem[];
     if (editingItem) {
       updated = notices.map((item) =>
-        item.id === editingItem.id ? { ...item, title, category, isImportant, status } : item
+        item.id === editingItem.id ? { ...item, ...newNoticeItem } : item
       );
     } else {
-      const newItem: NoticeItem = {
-        id: Date.now().toString(),
-        title,
-        category,
-        isImportant,
-        status,
-        date: new Date().toISOString().split('T')[0],
-      };
-      updated = [newItem, ...notices];
+      updated = [newNoticeItem, ...notices];
     }
-    saveNoticesToStorage(updated);
+
+    setNotices(updated);
+    saveStoredItems('nobel_cms_notices', updated);
+    setSaving(false);
     setModalOpen(false);
   };
 
   return (
     <AdminLayout
-      title="CMS Official Notices & Bulletins"
-      subtitle="Manage urgent institutional announcements and attachments"
+      title="Notices & Announcements Manager"
+      subtitle="Publish urgent announcements, examination routines, and official college circulars"
     >
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-white">Active Notices</h2>
-          <button
-            onClick={openCreateModal}
-            className="px-4 py-2 rounded-xl bg-amber-500 text-nobel-navy-950 font-bold text-xs flex items-center gap-1.5 shadow hover:bg-amber-400 transition"
-          >
-            <Plus className="w-4 h-4" />
-            Publish Notice
-          </button>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-nobel-navy-50 rounded-xl text-nobel-navy-700">
+              <Bell className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-nobel-navy-900">College Notice Board</h2>
+              <p className="text-xs text-slate-500">Manage all notices broadcasted on the public portal and mobile screens</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={fetchNotices}
+              className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+              title="Refresh from MongoDB database"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-nobel-gold-600' : ''}`} />
+            </button>
+            <button
+              onClick={openCreateModal}
+              className="px-4 py-2.5 rounded-xl bg-nobel-navy-900 text-white hover:bg-nobel-navy-800 text-sm font-semibold flex items-center gap-2 transition-all shadow-md hover:shadow-lg"
+            >
+              <Plus className="w-4 h-4" />
+              Publish New Notice
+            </button>
+          </div>
         </div>
 
-        <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl shadow-lg overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-900/90 border-b border-slate-700/80 text-[11px] font-bold uppercase text-slate-400">
-                <th className="py-4 px-4">Title</th>
-                <th className="py-4 px-4">Category</th>
-                <th className="py-4 px-4">Important</th>
-                <th className="py-4 px-4">Status</th>
-                <th className="py-4 px-4">Date</th>
-                <th className="py-4 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700/60 text-xs">
-              {notices.map((n) => (
-                <tr key={n.id} className="hover:bg-slate-900/40">
-                  <td className="py-4 px-4 font-bold text-white max-w-xs truncate">{n.title}</td>
-                  <td className="py-4 px-4">
-                    <span className="px-2.5 py-0.5 rounded bg-slate-900 text-slate-300 font-bold text-[10px] border border-slate-700">
-                      {n.category}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4">
-                    {n.isImportant ? (
-                      <span className="px-2.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold text-[10px] border border-amber-500/30">
-                        URGENT
-                      </span>
-                    ) : (
-                      'Standard'
-                    )}
-                  </td>
-                  <td className="py-4 px-4">
-                    <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold text-[10px] border border-emerald-500/30">
-                      {n.status}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4 text-slate-400">{n.date}</td>
-                  <td className="py-4 px-4 text-right space-x-2">
-                    <button onClick={() => openEditModal(n)} className="p-1.5 text-blue-400 hover:bg-blue-500/20 rounded-lg"><Edit className="w-4 h-4" /></button>
-                    <button onClick={() => handleDelete(n.id)} className="p-1.5 text-red-400 hover:bg-red-500/20 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                  </td>
+        {/* Notices Table */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-600">
+              <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 text-xs uppercase tracking-wider">
+                <tr>
+                  <th className="px-6 py-4">Notice Title</th>
+                  <th className="px-6 py-4">Category</th>
+                  <th className="px-6 py-4">Date</th>
+                  <th className="px-6 py-4">Priority</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {notices.map((notice) => (
+                  <tr key={notice.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-6 py-4 font-semibold text-nobel-navy-900">{notice.title}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                        {notice.category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-xs text-slate-500">{notice.date}</td>
+                    <td className="px-6 py-4">
+                      {notice.isImportant ? (
+                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                          Urgent / High
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full text-xs text-slate-500 bg-slate-100">Normal</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                          notice.status === 'PUBLISHED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {notice.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right space-x-2">
+                      <button
+                        onClick={() => openEditModal(notice)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-nobel-navy-900 hover:bg-slate-100 transition-colors"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(notice.id, notice._id)}
+                        className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* Modal Form */}
+        {/* Create/Edit Modal */}
         {modalOpen && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="text-base font-bold text-white">
+          <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <h3 className="text-lg font-bold text-nobel-navy-900">
                   {editingItem ? 'Edit Notice' : 'Publish New Notice'}
                 </h3>
-                <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white font-bold">
-                  ✕
-                </button>
+                <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block font-bold uppercase text-slate-300 mb-1">Notice Title *</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Notice Title</label>
                   <input
                     type="text"
                     required
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="e.g., SEE Entrance Examination Merit Scholarship Routine 2026"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-nobel-gold-500"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block font-bold uppercase text-slate-300 mb-1">Category</label>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Category</label>
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-nobel-gold-500"
                     >
                       <option value="Admission">Admission</option>
+                      <option value="Academic">Academic</option>
                       <option value="Examination">Examination</option>
+                      <option value="Scholarship">Scholarship</option>
                       <option value="General">General</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block font-bold uppercase text-slate-300 mb-1">Status</label>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Status</label>
                     <select
                       value={status}
                       onChange={(e) => setStatus(e.target.value as any)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-nobel-gold-500"
                     >
                       <option value="PUBLISHED">PUBLISHED</option>
                       <option value="DRAFT">DRAFT</option>
@@ -211,31 +324,34 @@ export default function AdminNoticesPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-2">
+                <div className="flex items-center gap-3 pt-2">
                   <input
                     type="checkbox"
-                    id="imp"
+                    id="isImportant"
                     checked={isImportant}
                     onChange={(e) => setIsImportant(e.target.checked)}
-                    className="rounded bg-slate-950 border-slate-800 text-amber-500 focus:ring-amber-500"
+                    className="w-4 h-4 text-nobel-gold-600 rounded border-slate-300 focus:ring-nobel-gold-500"
                   />
-                  <label htmlFor="imp" className="text-slate-300 font-bold">Mark as Urgent / Important Notice</label>
+                  <label htmlFor="isImportant" className="text-sm font-semibold text-slate-700">
+                    Mark as Urgent / Important Announcement (Red Badge)
+                  </label>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setModalOpen(false)}
-                    className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 font-bold text-xs"
+                    className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-sm font-semibold"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-lg bg-amber-500 text-nobel-navy-950 font-bold text-xs hover:bg-amber-400 shadow flex items-center gap-1.5"
+                    disabled={saving}
+                    className="px-5 py-2.5 rounded-xl bg-nobel-navy-900 text-white hover:bg-nobel-navy-800 text-sm font-semibold flex items-center gap-2 shadow-md"
                   >
                     <Save className="w-4 h-4" />
-                    Save Notice
+                    {saving ? 'Publishing to MongoDB...' : editingItem ? 'Save Changes' : 'Publish Notice'}
                   </button>
                 </div>
               </form>

@@ -102,6 +102,8 @@ const NOTICES_DATA: NoticeItem[] = [
   },
 ];
 
+import { getApiUrl } from '@/lib/storage';
+
 export default function NoticesPage() {
   const { lang, t } = useLanguage();
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -110,7 +112,39 @@ export default function NoticesPage() {
   const [allNotices, setAllNotices] = useState<NoticeItem[]>(NOTICES_DATA);
 
   React.useEffect(() => {
-    const loadStoredNotices = () => {
+    const loadNotices = async () => {
+      try {
+        const res = await fetch(getApiUrl('/api/v1/cms/notices'));
+        const json = await res.json();
+        if (res.ok && json.success && Array.isArray(json.data?.items)) {
+          const apiNotices: NoticeItem[] = json.data.items.map((n: any, idx: number) => ({
+            id: n._id || n.id || `api-${idx}`,
+            refNo: `NMC/NOTICE/2026/${(n.category || 'GEN').toUpperCase()}-${idx + 100}`,
+            title: n.title,
+            slug: n.slug || n.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+            category: (n.category?.toUpperCase() as any) || 'URGENT',
+            date: n.publishedAt ? new Date(n.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'August 25, 2026',
+            bsDate: '२०८३ भदौ',
+            isImportant: Boolean(n.isImportant),
+            isNew: true,
+            authority: 'Office of Campus Administration',
+            summary: n.content || n.title,
+            fullBody: n.content || n.title,
+            attachmentName: n.attachmentUrl ? 'Attached_Notice_Document.pdf' : 'Official_Notice.pdf',
+          }));
+
+          if (apiNotices.length > 0) {
+            const existingTitles = new Set(apiNotices.map((n) => n.title));
+            const defaultsFiltered = NOTICES_DATA.filter((d) => !existingTitles.has(d.title));
+            setAllNotices([...apiNotices, ...defaultsFiltered]);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('API notice fetch offline, using persistent storage fallback:', err);
+      }
+
+      // Fallback to local storage
       try {
         const saved = localStorage.getItem('nobel_cms_notices');
         if (saved) {
@@ -130,18 +164,16 @@ export default function NoticesPage() {
             fullBody: c.title,
             attachmentName: 'Official_Notice.pdf',
           }));
-          const existingIds = new Set(formattedCustom.map((n) => n.title));
-          const defaultsFiltered = NOTICES_DATA.filter((d) => !existingIds.has(d.title));
+          const existingTitles = new Set(formattedCustom.map((n) => n.title));
+          const defaultsFiltered = NOTICES_DATA.filter((d) => !existingTitles.has(d.title));
           setAllNotices([...formattedCustom, ...defaultsFiltered]);
         }
       } catch (err) {
         console.error('Failed to parse custom notices:', err);
       }
-    };
-
-    loadStoredNotices();
-    window.addEventListener('storage', loadStoredNotices);
-    return () => window.removeEventListener('storage', loadStoredNotices);
+    loadNotices();
+    window.addEventListener('storage', loadNotices);
+    return () => window.removeEventListener('storage', loadNotices);
   }, []);
 
   const filteredNotices = allNotices.filter((n) => {

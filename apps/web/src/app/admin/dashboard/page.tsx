@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { AdminLayout } from '@/components/AdminLayout';
+import { getApiUrl, addItem } from '@/lib/storage';
 import {
   Users,
   Inbox,
@@ -25,31 +26,42 @@ export default function AdminDashboardPage() {
   const [noticeTitle, setNoticeTitle] = useState('');
   const [noticeSuccess, setNoticeSuccess] = useState(false);
 
-  const handleCreateNotice = (e: React.FormEvent) => {
+  const handleCreateNotice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (noticeTitle.trim()) {
+      const slug = noticeTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+      const payload = {
+        title: noticeTitle.trim(),
+        slug: slug || `notice-${Date.now()}`,
+        content: noticeTitle.trim() || 'Official notice from Nobel Multiple College.',
+        category: 'Admission',
+        isImportant: true,
+        status: 'PUBLISHED',
+        publishedAt: new Date().toISOString(),
+      };
+
+      const newItem = {
+        id: Date.now().toString(),
+        title: noticeTitle.trim(),
+        category: 'Admission',
+        isImportant: true,
+        status: 'PUBLISHED',
+        date: new Date().toISOString().split('T')[0],
+      };
+
+      addItem('nobel_cms_notices', newItem);
+
       try {
-        const saved = localStorage.getItem('nobel_cms_notices');
-        const existing = saved
-          ? JSON.parse(saved)
-          : [
-              { id: '1', title: 'Admissions Open for Session 2026', category: 'Admission', status: 'PUBLISHED', isImportant: true, date: '2026-08-24' },
-              { id: '2', title: 'First Semester Internal Examination Routine Notice', category: 'Examination', status: 'PUBLISHED', isImportant: false, date: '2026-08-18' },
-            ];
-        const newItem = {
-          id: Date.now().toString(),
-          title: noticeTitle.trim(),
-          category: 'Admission',
-          isImportant: true,
-          status: 'PUBLISHED',
-          date: new Date().toISOString().split('T')[0],
-        };
-        localStorage.setItem('nobel_cms_notices', JSON.stringify([newItem, ...existing]));
-        window.dispatchEvent(new Event('storage'));
+        await fetch(getApiUrl('/api/v1/cms/notices'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
       } catch (err) {
-        console.error('Failed to save quick notice:', err);
+        console.warn('API notice publish offline, saved locally:', err);
       }
     }
+
     setNoticeSuccess(true);
     setTimeout(() => {
       setNoticeSuccess(false);
