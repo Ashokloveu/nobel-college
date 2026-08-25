@@ -19,11 +19,14 @@ import searchRoutes from './routes/search.routes';
 export const createApp = (): express.Application => {
   const app = express();
 
-  // Security Headers & CORS
+  // Security Headers & Allowed CORS Origins
   app.use(helmet());
   app.use(
     cors({
-      origin: [ENV.APP_URL, 'http://localhost:3000'],
+      origin: (origin, callback) => {
+        // Allow all origins or match production frontend domains
+        callback(null, true);
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
@@ -37,6 +40,18 @@ export const createApp = (): express.Application => {
 
   // Static files upload directory
   app.use('/uploads', express.static(path.resolve(ENV.STORAGE.UPLOAD_DIR)));
+
+  // Root landing endpoint
+  app.get('/', (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      institution: 'Nobel Multiple College',
+      location: 'Bardibas, Mahottari, Madhesh Province, Nepal',
+      status: 'API Server & Database Active',
+      healthCheck: '/health',
+      apiVersion: '/api/v1',
+    });
+  });
 
   // Health check endpoint
   app.get('/health', (_req: Request, res: Response) => {
@@ -62,7 +77,7 @@ export const createApp = (): express.Application => {
   app.use('/api/v1/audit-logs', auditLogRoutes);
   app.use('/api/v1/academics', academicRoutes);
   app.use('/api/v1/admissions', admissionRoutes);
-  app.use('/api/v1/contact', contactRoutes);
+  app.use('/api/v1/contacts', contactRoutes);
   app.use('/api/v1/cms', cmsRoutes);
   app.use('/api/v1/search', searchRoutes);
 
