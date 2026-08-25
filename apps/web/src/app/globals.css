@@ -1,0 +1,21 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+:root {
+  --primary-navy: #0f2b48;
+  --secondary-navy: #18426c;
+  --accent-crimson: #8b0000;
+  --accent-gold: #d4af37;
+  --bg-slate: #f8fafc;
+}
+
+body {
+  background-color: var(--bg-slate);
+  color: #1e293b;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.heading-serif {
+  font-family: 'Merriweather', Georgia, serif;
+}

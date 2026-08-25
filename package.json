@@ -1,0 +1,26 @@
+{
+  "name": "nobel-multiple-college-platform",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm --prefix apps/api run dev",
+    "dev:web": "npm --prefix apps/web run dev",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "build:packages": "npm --prefix packages/types run build && npm --prefix packages/validation run build",
+    "build": "npm run build:packages && npm --prefix apps/api run build && npm --prefix apps/web run build",
+    "typecheck": "npm --prefix packages/types run typecheck && npm --prefix packages/validation run typecheck && npm --prefix apps/api run typecheck && npm --prefix apps/web run typecheck",
+    "test:api": "npm --prefix apps/api run test",
+    "seed": "npm --prefix apps/api run seed"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}
