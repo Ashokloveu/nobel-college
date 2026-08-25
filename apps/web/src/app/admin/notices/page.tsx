@@ -19,6 +19,29 @@ export default function AdminNoticesPage() {
     { id: '2', title: 'First Semester Internal Examination Routine Notice', category: 'Examination', status: 'PUBLISHED', isImportant: false, date: '2026-08-18' },
   ]);
 
+  // Load persisted notices from localStorage on mount
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem('nobel_cms_notices');
+      if (saved) {
+        setNotices(JSON.parse(saved));
+      }
+    } catch (err) {
+      console.error('Failed to load notices from storage:', err);
+    }
+  }, []);
+
+  // Helper to update state & persist
+  const saveNoticesToStorage = (updated: NoticeItem[]) => {
+    setNotices(updated);
+    try {
+      localStorage.setItem('nobel_cms_notices', JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error('Failed to save notices to storage:', err);
+    }
+  };
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<NoticeItem | null>(null);
   const [title, setTitle] = useState('');
@@ -46,17 +69,17 @@ export default function AdminNoticesPage() {
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this notice?')) {
-      setNotices((prev) => prev.filter((item) => item.id !== id));
+      const updated = notices.filter((item) => item.id !== id);
+      saveNoticesToStorage(updated);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    let updated: NoticeItem[];
     if (editingItem) {
-      setNotices((prev) =>
-        prev.map((item) =>
-          item.id === editingItem.id ? { ...item, title, category, isImportant, status } : item
-        )
+      updated = notices.map((item) =>
+        item.id === editingItem.id ? { ...item, title, category, isImportant, status } : item
       );
     } else {
       const newItem: NoticeItem = {
@@ -67,8 +90,9 @@ export default function AdminNoticesPage() {
         status,
         date: new Date().toISOString().split('T')[0],
       };
-      setNotices((prev) => [newItem, ...prev]);
+      updated = [newItem, ...notices];
     }
+    saveNoticesToStorage(updated);
     setModalOpen(false);
   };
 

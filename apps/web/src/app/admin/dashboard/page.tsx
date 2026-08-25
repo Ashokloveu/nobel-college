@@ -27,6 +27,29 @@ export default function AdminDashboardPage() {
 
   const handleCreateNotice = (e: React.FormEvent) => {
     e.preventDefault();
+    if (noticeTitle.trim()) {
+      try {
+        const saved = localStorage.getItem('nobel_cms_notices');
+        const existing = saved
+          ? JSON.parse(saved)
+          : [
+              { id: '1', title: 'Admissions Open for Session 2026', category: 'Admission', status: 'PUBLISHED', isImportant: true, date: '2026-08-24' },
+              { id: '2', title: 'First Semester Internal Examination Routine Notice', category: 'Examination', status: 'PUBLISHED', isImportant: false, date: '2026-08-18' },
+            ];
+        const newItem = {
+          id: Date.now().toString(),
+          title: noticeTitle.trim(),
+          category: 'Admission',
+          isImportant: true,
+          status: 'PUBLISHED',
+          date: new Date().toISOString().split('T')[0],
+        };
+        localStorage.setItem('nobel_cms_notices', JSON.stringify([newItem, ...existing]));
+        window.dispatchEvent(new Event('storage'));
+      } catch (err) {
+        console.error('Failed to save quick notice:', err);
+      }
+    }
     setNoticeSuccess(true);
     setTimeout(() => {
       setNoticeSuccess(false);

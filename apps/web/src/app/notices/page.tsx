@@ -107,8 +107,44 @@ export default function NoticesPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeNoticeModal, setActiveNoticeModal] = useState<NoticeItem | null>(null);
+  const [allNotices, setAllNotices] = useState<NoticeItem[]>(NOTICES_DATA);
 
-  const filteredNotices = NOTICES_DATA.filter((n) => {
+  React.useEffect(() => {
+    const loadStoredNotices = () => {
+      try {
+        const saved = localStorage.getItem('nobel_cms_notices');
+        if (saved) {
+          const custom: any[] = JSON.parse(saved);
+          const formattedCustom: NoticeItem[] = custom.map((c, i) => ({
+            id: c.id || `custom-${i}`,
+            refNo: `NMC/NOTICE/2026/${c.category?.toUpperCase() || 'GEN'}-${c.id?.slice(-3) || '001'}`,
+            title: c.title,
+            slug: c.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'notice',
+            category: (c.category?.toUpperCase() as any) || 'URGENT',
+            date: c.date || new Date().toISOString().split('T')[0],
+            bsDate: '२०८३ भदौ',
+            isImportant: !!c.isImportant,
+            isNew: true,
+            authority: 'Office of Campus Administration',
+            summary: c.title,
+            fullBody: c.title,
+            attachmentName: 'Official_Notice.pdf',
+          }));
+          const existingIds = new Set(formattedCustom.map((n) => n.title));
+          const defaultsFiltered = NOTICES_DATA.filter((d) => !existingIds.has(d.title));
+          setAllNotices([...formattedCustom, ...defaultsFiltered]);
+        }
+      } catch (err) {
+        console.error('Failed to parse custom notices:', err);
+      }
+    };
+
+    loadStoredNotices();
+    window.addEventListener('storage', loadStoredNotices);
+    return () => window.removeEventListener('storage', loadStoredNotices);
+  }, []);
+
+  const filteredNotices = allNotices.filter((n) => {
     const matchesCategory = categoryFilter === 'ALL' || n.category === categoryFilter;
     const matchesSearch =
       n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
