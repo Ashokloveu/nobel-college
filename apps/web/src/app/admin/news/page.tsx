@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { FileText, Plus, Edit, Trash2, Save, CheckCircle2 } from 'lucide-react';
 
+import { getStoredItems, saveStoredItems, addItem, updateItem, deleteItem } from '@/lib/storage';
+
 interface NewsArticle {
   id: string;
   title: string;
@@ -13,25 +15,31 @@ interface NewsArticle {
   publishedAt: string;
 }
 
+const DEFAULT_NEWS: NewsArticle[] = [
+  {
+    id: '1',
+    title: 'Nobel Multiple College Hosts Annual IT & Science Exhibition 2026',
+    category: 'Campus Life',
+    summary: 'Students showcased innovative software applications, robotics, and hardware projects in Bardibas.',
+    status: 'PUBLISHED',
+    publishedAt: '2026-08-20',
+  },
+  {
+    id: '2',
+    title: 'Oriented Workshop on Career Guidance & Higher Education Opportunities',
+    category: 'Academic',
+    summary: 'Distinguished industry experts delivered sessions on BCA, BBS, and postgraduate career paths.',
+    status: 'PUBLISHED',
+    publishedAt: '2026-08-14',
+  },
+];
+
 export default function AdminNewsPage() {
-  const [newsList, setNewsList] = useState<NewsArticle[]>([
-    {
-      id: '1',
-      title: 'Nobel Multiple College Hosts Annual IT & Science Exhibition 2026',
-      category: 'Campus Life',
-      summary: 'Students showcased innovative software applications, robotics, and hardware projects in Bardibas.',
-      status: 'PUBLISHED',
-      publishedAt: '2026-08-20',
-    },
-    {
-      id: '2',
-      title: 'Oriented Workshop on Career Guidance & Higher Education Opportunities',
-      category: 'Academic',
-      summary: 'Distinguished industry experts delivered sessions on BCA, BBS, and postgraduate career paths.',
-      status: 'PUBLISHED',
-      publishedAt: '2026-08-14',
-    },
-  ]);
+  const [newsList, setNewsList] = useState<NewsArticle[]>([]);
+
+  React.useEffect(() => {
+    setNewsList(getStoredItems<NewsArticle>('nobel_cms_news', DEFAULT_NEWS));
+  }, []);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<NewsArticle | null>(null);
@@ -60,20 +68,21 @@ export default function AdminNewsPage() {
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this news article?')) {
-      setNewsList((prev) => prev.filter((item) => item.id !== id));
+      const updated = deleteItem<NewsArticle>('nobel_cms_news', id, DEFAULT_NEWS);
+      setNewsList(updated);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingItem) {
-      setNewsList((prev) =>
-        prev.map((item) =>
-          item.id === editingItem.id
-            ? { ...item, title, category, summary, status }
-            : item
-        )
+      const updated = updateItem<NewsArticle>(
+        'nobel_cms_news',
+        editingItem.id,
+        { title, category, summary, status },
+        DEFAULT_NEWS
       );
+      setNewsList(updated);
     } else {
       const newItem: NewsArticle = {
         id: Date.now().toString(),
@@ -83,7 +92,8 @@ export default function AdminNewsPage() {
         status,
         publishedAt: new Date().toISOString().split('T')[0],
       };
-      setNewsList((prev) => [newItem, ...prev]);
+      const updated = addItem<NewsArticle>('nobel_cms_news', newItem, DEFAULT_NEWS);
+      setNewsList(updated);
     }
     setModalOpen(false);
   };

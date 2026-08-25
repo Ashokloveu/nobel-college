@@ -5,6 +5,8 @@ import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { GraduationCap, CheckCircle2, AlertCircle, Send, Sparkles } from 'lucide-react';
 
+import { getApiUrl, addItem } from '@/lib/storage';
+
 export default function AdmissionPage() {
   const [submittedInquiry, setSubmittedInquiry] = useState<{ inquiryNumber: string; name: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -25,32 +27,50 @@ export default function AdmissionPage() {
     setLoading(true);
     setErrorMsg(null);
 
+    const year = new Date().getFullYear();
+    const randSeq = Math.floor(100000 + Math.random() * 900000);
+    const generatedInquiryNo = `NMC-${year}-${randSeq}`;
+
+    const newRecord = {
+      id: generatedInquiryNo,
+      inquiryNumber: generatedInquiryNo,
+      name: formData.applicantName,
+      applicantName: formData.applicantName,
+      email: formData.email,
+      phone: formData.phone,
+      address: formData.address,
+      program: formData.programId,
+      qualification: formData.qualification,
+      message: formData.message,
+      status: 'PENDING',
+      submittedAt: new Date().toISOString(),
+    };
+
+    // Save locally to storage immediately
+    addItem('nobel_cms_admissions', newRecord);
+
     try {
-      // Simulate API post or post to endpoint
-      const res = await fetch('/api/v1/admissions', {
+      const res = await fetch(getApiUrl('/api/v1/admissions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
       const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error?.message || 'Failed to submit admission inquiry');
+      if (res.ok && json.success) {
+        setSubmittedInquiry({
+          inquiryNumber: json.data.inquiryNumber || generatedInquiryNo,
+          name: formData.applicantName,
+        });
+        return;
       }
-
-      setSubmittedInquiry({
-        inquiryNumber: json.data.inquiryNumber || 'NMC-2026-000101',
-        name: formData.applicantName,
-      });
     } catch (err: any) {
-      // Fallback demo submission for client preview if API offline
-      const year = new Date().getFullYear();
-      const randSeq = Math.floor(100000 + Math.random() * 900000);
+      console.warn('API call offline, saved locally to persistent storage:', err);
+    } finally {
       setSubmittedInquiry({
-        inquiryNumber: `NMC-${year}-${randSeq}`,
+        inquiryNumber: generatedInquiryNo,
         name: formData.applicantName,
       });
-    } finally {
       setLoading(false);
     }
   };

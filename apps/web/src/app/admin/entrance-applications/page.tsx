@@ -32,38 +32,56 @@ interface EntranceAppRecord {
   submittedAt: string;
 }
 
+import { getStoredItems, saveStoredItems } from '@/lib/storage';
+
+const DEFAULT_ENTRANCE_APPS: EntranceAppRecord[] = [
+  {
+    id: '1',
+    regNumber: 'ENT-2026-000101',
+    symbolNumber: 'NMC-SYM-2026-042',
+    fullName: 'Sujan Mahato',
+    guardianName: 'Ram Kumar Mahato',
+    phone: '+977-9851234567',
+    district: 'Mahottari',
+    seeSchool: 'Janata Secondary School, Bardibas',
+    seeGPA: '3.75',
+    program: 'Bachelor in Computer Application (BCA)',
+    status: 'VERIFIED_APPROVED',
+    examDate: 'September 10, 2026 (11:00 AM)',
+    examHall: 'Main Academic Hall - Room 102',
+    submittedAt: '2026-08-24 09:30 AM',
+  },
+  {
+    id: '2',
+    regNumber: 'ENT-2026-000102',
+    fullName: 'Pooja Raut',
+    guardianName: 'Shyam Raut',
+    phone: '+977-9844112233',
+    district: 'Dhanusha',
+    seeSchool: 'Shree Krishna H.S. School, Janakpur',
+    seeGPA: '3.85',
+    program: '+2 Science Stream',
+    status: 'SUBMITTED',
+    submittedAt: '2026-08-24 10:45 AM',
+  },
+];
+
 export default function AdminEntranceApplicationsPage() {
-  const [applications, setApplications] = useState<EntranceAppRecord[]>([
-    {
-      id: '1',
-      regNumber: 'ENT-2026-000101',
-      symbolNumber: 'NMC-SYM-2026-042',
-      fullName: 'Sujan Mahato',
-      guardianName: 'Ram Kumar Mahato',
-      phone: '+977-9851234567',
-      district: 'Mahottari',
-      seeSchool: 'Janata Secondary School, Bardibas',
-      seeGPA: '3.75',
-      program: 'Bachelor in Computer Application (BCA)',
-      status: 'VERIFIED_APPROVED',
-      examDate: 'September 10, 2026 (11:00 AM)',
-      examHall: 'Main Academic Hall - Room 102',
-      submittedAt: '2026-08-24 09:30 AM',
-    },
-    {
-      id: '2',
-      regNumber: 'ENT-2026-000102',
-      fullName: 'Pooja Raut',
-      guardianName: 'Shyam Raut',
-      phone: '+977-9844112233',
-      district: 'Dhanusha',
-      seeSchool: 'Shree Krishna H.S. School, Janakpur',
-      seeGPA: '3.85',
-      program: '+2 Science Stream',
-      status: 'SUBMITTED',
-      submittedAt: '2026-08-24 10:45 AM',
-    },
-  ]);
+  const [applications, setApplications] = useState<EntranceAppRecord[]>([]);
+
+  React.useEffect(() => {
+    const loadApps = () => {
+      setApplications(getStoredItems<EntranceAppRecord>('nobel_cms_entrance_apps', DEFAULT_ENTRANCE_APPS));
+    };
+    loadApps();
+    window.addEventListener('storage', loadApps);
+    return () => window.removeEventListener('storage', loadApps);
+  }, []);
+
+  const saveApps = (updated: EntranceAppRecord[]) => {
+    setApplications(updated);
+    saveStoredItems('nobel_cms_entrance_apps', updated);
+  };
 
   const [selectedApp, setSelectedApp] = useState<EntranceAppRecord | null>(null);
   const [symbolNo, setSymbolNo] = useState('');
@@ -79,20 +97,19 @@ export default function AdminEntranceApplicationsPage() {
     e.preventDefault();
     if (!selectedApp) return;
 
-    setApplications((prev) =>
-      prev.map((a) =>
-        a.id === selectedApp.id
-          ? {
-              ...a,
-              status: 'VERIFIED_APPROVED',
-              symbolNumber: symbolNo,
-              examDate,
-              examHall,
-            }
-          : a
-      )
+    const updated = applications.map((a) =>
+      a.id === selectedApp.id
+        ? {
+            ...a,
+            status: 'VERIFIED_APPROVED' as const,
+            symbolNumber: symbolNo,
+            examDate,
+            examHall,
+          }
+        : a
     );
 
+    saveApps(updated);
     setSelectedApp(null);
   };
 

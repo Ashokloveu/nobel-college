@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { addItem } from '@/lib/storage';
 import {
   FileText,
   CheckCircle2,
@@ -112,6 +113,16 @@ export default function EntranceRegistrationPage() {
       signatureUrl: signatureUrl || 'https://upload.wikimedia.org/wikipedia/commons/f/fa/John_Hancock_signature.svg',
       submittedAt: new Date().toLocaleString(),
     };
+
+    // Save persistently to storage
+    addItem('nobel_cms_entrance_apps', {
+      ...newApp,
+      id: newRegNum,
+      applicantName: fullName,
+      status: 'SUBMITTED',
+      admitCardGenerated: true,
+      symbolNo: `SYM-${newRegNum.slice(-6)}`,
+    });
 
     setSubmittedReg(newApp);
   };

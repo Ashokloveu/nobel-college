@@ -100,14 +100,52 @@ const ARTICLES_DATA: NewsArticle[] = [
   },
 ];
 
+import { getStoredItems } from '@/lib/storage';
+
 export default function NewsPage() {
   const { lang, t } = useLanguage();
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [allArticles, setAllArticles] = useState<NewsArticle[]>(ARTICLES_DATA);
 
-  const featuredArticle = ARTICLES_DATA.find((a) => a.isFeatured) || ARTICLES_DATA[0];
+  React.useEffect(() => {
+    const loadNews = () => {
+      try {
+        const saved = localStorage.getItem('nobel_cms_news');
+        if (saved) {
+          const custom: any[] = JSON.parse(saved);
+          const formatted: NewsArticle[] = custom.map((c, i) => ({
+            id: c.id || `custom-${i}`,
+            title: c.title,
+            slug: c.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'news',
+            summary: c.summary || c.title,
+            content: c.summary || c.title,
+            date: c.publishedAt || new Date().toISOString().split('T')[0],
+            readTime: '3 min read',
+            category: (c.category?.toUpperCase() as any) || 'CAMPUS LIFE',
+            image: '/images/hero-campus.jpg',
+            author: 'Editorial Desk',
+            authorRole: 'Media Cell',
+            viewsCount: 100,
+            isFeatured: i === 0,
+          }));
+          const customTitles = new Set(formatted.map((f) => f.title));
+          const defaultFiltered = ARTICLES_DATA.filter((a) => !customTitles.has(a.title));
+          setAllArticles([...formatted, ...defaultFiltered]);
+        }
+      } catch (err) {
+        console.error('Failed to parse news storage:', err);
+      }
+    };
 
-  const filteredArticles = ARTICLES_DATA.filter((a) => {
+    loadNews();
+    window.addEventListener('storage', loadNews);
+    return () => window.removeEventListener('storage', loadNews);
+  }, []);
+
+  const featuredArticle = allArticles.find((a) => a.isFeatured) || allArticles[0];
+
+  const filteredArticles = allArticles.filter((a) => {
     const matchesCategory = categoryFilter === 'ALL' || a.category === categoryFilter;
     const matchesSearch =
       a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

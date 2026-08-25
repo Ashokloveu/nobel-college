@@ -88,14 +88,56 @@ const EVENTS_DATA: EventItem[] = [
   },
 ];
 
+import { getStoredItems } from '@/lib/storage';
+
 export default function EventsPage() {
   const { lang, t } = useLanguage();
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeRsvpEvent, setActiveRsvpEvent] = useState<EventItem | null>(null);
   const [rsvpSubmitted, setRsvpSubmitted] = useState(false);
+  const [allEvents, setAllEvents] = useState<EventItem[]>(EVENTS_DATA);
 
-  const filteredEvents = EVENTS_DATA.filter((e) => {
+  React.useEffect(() => {
+    const loadEvents = () => {
+      try {
+        const saved = localStorage.getItem('nobel_cms_events');
+        if (saved) {
+          const custom: any[] = JSON.parse(saved);
+          const formatted: EventItem[] = custom.map((c, i) => {
+            const dateObj = new Date(c.date || Date.now());
+            const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+            return {
+              id: c.id || `custom-${i}`,
+              title: c.title,
+              slug: c.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'event',
+              month: months[dateObj.getMonth()] || 'OCT',
+              day: dateObj.getDate() ? String(dateObj.getDate()) : '15',
+              year: String(dateObj.getFullYear() || 2026),
+              startDate: c.date || 'October 15, 2026',
+              time: '10:00 AM - 03:00 PM',
+              location: c.location || 'Campus Main Hall',
+              organizer: 'Campus Administration',
+              category: 'WORKSHOP',
+              description: c.title,
+              registrationOpen: true,
+            };
+          });
+          const customTitles = new Set(formatted.map((f) => f.title));
+          const defaultFiltered = EVENTS_DATA.filter((e) => !customTitles.has(e.title));
+          setAllEvents([...formatted, ...defaultFiltered]);
+        }
+      } catch (err) {
+        console.error('Failed to parse events storage:', err);
+      }
+    };
+
+    loadEvents();
+    window.addEventListener('storage', loadEvents);
+    return () => window.removeEventListener('storage', loadEvents);
+  }, []);
+
+  const filteredEvents = allEvents.filter((e) => {
     const matchesCategory = categoryFilter === 'ALL' || e.category === categoryFilter;
     const matchesSearch =
       e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

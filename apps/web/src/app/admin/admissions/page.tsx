@@ -89,8 +89,24 @@ const INITIAL_INQUIRIES: Inquiry[] = [
   },
 ];
 
+import { getStoredItems, saveStoredItems } from '@/lib/storage';
+
 export default function AdminAdmissionsPage() {
-  const [inquiries, setInquiries] = useState<Inquiry[]>(INITIAL_INQUIRIES);
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+
+  React.useEffect(() => {
+    const loadInquiries = () => {
+      setInquiries(getStoredItems<Inquiry>('nobel_cms_admissions', INITIAL_INQUIRIES));
+    };
+    loadInquiries();
+    window.addEventListener('storage', loadInquiries);
+    return () => window.removeEventListener('storage', loadInquiries);
+  }, []);
+
+  const saveInquiries = (updated: Inquiry[]) => {
+    setInquiries(updated);
+    saveStoredItems('nobel_cms_admissions', updated);
+  };
   const [activeTab, setActiveTab] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
