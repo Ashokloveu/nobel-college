@@ -6,6 +6,24 @@ export function getApiUrl(path: string): string {
   return `${API_BASE_URL}${cleanPath}`;
 }
 
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (!headers.has('Content-Type') && init.body) headers.set('Content-Type', 'application/json');
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('accessToken');
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+  }
+  return fetch(getApiUrl(path), { ...init, headers, credentials: 'include' });
+}
+
+export async function readApiJson<T>(response: Response): Promise<T> {
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok || json.success === false) {
+    throw new Error(json.error?.message || json.message || `Request failed (${response.status})`);
+  }
+  return json as T;
+}
+
 export function getStoredItems<T>(key: string, defaultItems: T[] = []): T[] {
   if (typeof window === 'undefined') return defaultItems;
   try {

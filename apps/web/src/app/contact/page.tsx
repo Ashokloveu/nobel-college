@@ -20,6 +20,7 @@ import {
   PhoneCall,
   Globe,
 } from 'lucide-react';
+import { apiFetch, readApiJson } from '@/lib/storage';
 
 interface DepartmentContact {
   id: string;
@@ -70,6 +71,7 @@ export default function ContactPage() {
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>('ADM');
   const [isOfficeOpen, setIsOfficeOpen] = useState(true);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -93,9 +95,20 @@ export default function ContactPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const year = new Date().getFullYear();
-    const randSeq = Math.floor(100000 + Math.random() * 900000);
-    setSubmittedRef(`MSG-${year}-${randSeq}`);
+    setSubmitError(null);
+    try {
+      const response = await apiFetch('/api/v1/contacts', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...formData,
+          subject: `[${selectedDept}] ${formData.subject}`,
+        }),
+      });
+      const json: any = await readApiJson(response);
+      setSubmittedRef(json.data?.referenceNumber || json.data?._id || `MSG-${new Date().getFullYear()}`);
+    } catch (error: any) {
+      setSubmitError(error.message || 'Your message could not be saved. Please try again.');
+    }
   };
 
   const activeDeptObj = DEPARTMENTS_CONTACT.find((d) => d.id === selectedDept) || DEPARTMENTS_CONTACT[0];
@@ -261,6 +274,11 @@ export default function ContactPage() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+                  {submitError && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">
+                      {submitError}
+                    </div>
+                  )}
                   <div className="border-b border-slate-100 pb-3">
                     <h3 className="text-base font-bold text-nobel-navy-900 heading-serif">
                       Send Direct Message to {activeDeptObj.nameEn}

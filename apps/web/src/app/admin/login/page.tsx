@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Mail, KeyRound, ShieldAlert, ArrowRight, Sparkles } from 'lucide-react';
+import { apiFetch, readApiJson } from '@/lib/storage';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -13,35 +14,19 @@ export default function AdminLoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const performLoginSuccess = () => {
-    localStorage.setItem('accessToken', 'mock_admin_token_2026');
-    localStorage.setItem(
-      'user',
-      JSON.stringify({
-        name: 'College Administrator',
-        email: 'admin@nobelcollege.edu.np',
-        role: 'SUPER_ADMIN',
-      })
-    );
-    router.push('/admin/dashboard');
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
 
     try {
-      const res = await fetch('/api/v1/auth/login', {
+      const res = await apiFetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, twoFactorCode }),
       });
 
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error?.message || 'Invalid login credentials');
-      }
+      const json: any = await readApiJson(res);
 
       if (json.data?.requiresTwoFactor) {
         setRequires2FA(true);
@@ -56,8 +41,7 @@ export default function AdminLoginPage() {
 
       router.push('/admin/dashboard');
     } catch (err: any) {
-      // Fallback for demonstration / offline evaluation
-      performLoginSuccess();
+      setErrorMsg(err.message || 'Unable to sign in. Please check your credentials.');
     } finally {
       setLoading(false);
     }

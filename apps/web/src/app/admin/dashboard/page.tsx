@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { AdminLayout } from '@/components/AdminLayout';
-import { getApiUrl, addItem } from '@/lib/storage';
+import { apiFetch, addItem } from '@/lib/storage';
 import {
   Users,
   Inbox,
@@ -52,7 +52,7 @@ export default function AdminDashboardPage() {
       addItem('nobel_cms_notices', newItem);
 
       try {
-        await fetch(getApiUrl('/api/v1/cms/notices'), {
+        await apiFetch('/api/v1/cms/notices', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

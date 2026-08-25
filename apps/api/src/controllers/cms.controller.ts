@@ -234,6 +234,27 @@ export class CmsController {
     }
   }
 
+  static async updateEvent(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = eventSchema.partial().parse(req.body);
+      const event = await Event.findByIdAndUpdate(req.params.id, data, { new: true, runValidators: true });
+      if (!event) throw new NotFoundError('Event not found');
+      res.json({ success: true, message: 'Event updated', data: event });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async deleteEvent(req: Request, res: Response, next: NextFunction) {
+    try {
+      const event = await Event.findByIdAndDelete(req.params.id);
+      if (!event) throw new NotFoundError('Event not found');
+      res.json({ success: true, message: 'Event deleted' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   // --- GALLERY ALBUMS ---
   static async listGalleryAlbums(_req: Request, res: Response, next: NextFunction) {
     try {

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Bell, Plus, Edit, Trash2, Save, RefreshCw } from 'lucide-react';
-import { getApiUrl, getStoredItems, saveStoredItems } from '@/lib/storage';
+import { apiFetch, getApiUrl, getStoredItems, saveStoredItems } from '@/lib/storage';
 
 interface NoticeItem {
   id: string;
@@ -102,7 +102,7 @@ export default function AdminNoticesPage() {
 
       if (mongoId) {
         try {
-          await fetch(getApiUrl(`/api/v1/cms/notices/${mongoId}`), { method: 'DELETE' });
+          await apiFetch(`/api/v1/cms/notices/${mongoId}`, { method: 'DELETE' });
         } catch (e) {
           console.warn('Could not delete from API:', e);
         }
@@ -139,10 +139,10 @@ export default function AdminNoticesPage() {
     // Save to MongoDB Atlas API
     try {
       const isEdit = Boolean(editingItem?._id);
-      const url = isEdit ? getApiUrl(`/api/v1/cms/notices/${editingItem!._id}`) : getApiUrl('/api/v1/cms/notices');
+      const url = isEdit ? `/api/v1/cms/notices/${editingItem!._id}` : '/api/v1/cms/notices';
       const method = isEdit ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
