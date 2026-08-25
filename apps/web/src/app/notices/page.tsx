@@ -171,6 +171,8 @@ export default function NoticesPage() {
       } catch (err) {
         console.error('Failed to parse custom notices:', err);
       }
+    };
+
     loadNotices();
     window.addEventListener('storage', loadNotices);
     return () => window.removeEventListener('storage', loadNotices);
