@@ -7,7 +7,7 @@ dotenv.config();
 
 export const ENV = {
   NODE_ENV: process.env.NODE_ENV || 'development',
-  PORT: parseInt(process.env.PORT || '5000', 10),
+  PORT: parseInt(process.env.PORT || '10000', 10),
   APP_URL: process.env.APP_URL || 'http://localhost:3000',
   API_URL: process.env.API_URL || 'http://localhost:5000',
   MONGODB_URI: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/nobel_college_db',
