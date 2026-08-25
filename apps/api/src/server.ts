@@ -7,7 +7,7 @@ const startServer = async () => {
   await connectDB();
   const app = createApp();
 
-  const server = app.listen(ENV.PORT, () => {
+  const server = app.listen(ENV.PORT, '0.0.0.0', () => {
     logger.info(`🚀 Nobel Multiple College API Server running on port ${ENV.PORT} [${ENV.NODE_ENV}]`);
   });
 
